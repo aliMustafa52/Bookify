@@ -39,10 +39,10 @@
             _context.Categories.Add(category);
             _context.SaveChanges();
 
-            
+
             var viewModel = _mapper.Map<CategoryViewModel>(category);
             return PartialView("_CategoryRow", viewModel);
-            
+
         }
 
         [HttpGet]
@@ -66,10 +66,10 @@
                 return BadRequest();
 
             var category = _context.Categories.Find(model.Id);
-            if(category is null)
+            if (category is null)
                 return NotFound();
 
-            category = _mapper.Map(model,category);
+            category = _mapper.Map(model, category);
             category.LastUpdatedOn = DateTime.Now;
 
             _context.Categories.Update(category);
@@ -84,7 +84,7 @@
         public IActionResult ToggleStatus(int id)
         {
             var category = _context.Categories.Find(id);
-            if(category is null)
+            if (category is null)
                 return NotFound();
 
             category.IsDeleted = !category.IsDeleted; // best way to toggle boolean
