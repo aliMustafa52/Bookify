@@ -18,7 +18,7 @@ namespace Bookify.web.Controllers
         {
 
             var authors = _context.Authors.AsNoTracking().ToList();
-            var viewModel = _mapper.Map<IEnumerable<CategoryViewModel>>(authors);
+            var viewModel = _mapper.Map<IEnumerable<AuthorViewModel>>(authors);
 
             return View(viewModel);
         }
@@ -91,10 +91,10 @@ namespace Bookify.web.Controllers
 
             author.IsDeleted = !author.IsDeleted; // best way to toggle boolean
             // long way to toggle boolean
-            //if(category.IsDeleted)
-            //    category.IsDeleted = false;
+            //if(author.IsDeleted)
+            //    author.IsDeleted = false;
             //else
-            //    category.IsDeleted = true;
+            //    author.IsDeleted = true;
 
             author.LastUpdatedOn = DateTime.Now;
 
