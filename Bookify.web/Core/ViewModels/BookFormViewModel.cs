@@ -18,7 +18,7 @@ namespace Bookify.web.Core.ViewModels
         public string Publisher { get; set; } = null!;
 
         [Display(Name = "Publishing Date")]
-        public DateTime PublishingDate { get; set; }
+        public DateTime PublishingDate { get; set; } = DateTime.Now;
 
         public IFormFile? Image { get; set; }
 
@@ -30,6 +30,7 @@ namespace Bookify.web.Core.ViewModels
 
         public string Description { get; set; } = null!;
 
+        [Display(Name = "Categories")]
         public IList<int> SelectedCategories { get; set; } = new List<int>();
 
         public IEnumerable<SelectListItem>? Categories { get; set; }
