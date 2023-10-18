@@ -1,17 +1,23 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Bookify.web.Core.Models;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace Bookify.web.Controllers
 {
     public class BooksController : Controller
     {
-        public readonly ApplicationDbContext _context;
-        public readonly IMapper _mapper;
+        private readonly IWebHostEnvironment _webHostEnvironment;
+        private readonly ApplicationDbContext _context;
+        private readonly IMapper _mapper;
 
-        public BooksController(ApplicationDbContext context, IMapper mapper)
+        private List<string> _allowedExtentions = new() { ".jpg", ".jpeg", ".png" };
+        private int _maxAllowedSize = 2097152;
+
+        public BooksController(ApplicationDbContext context, IMapper mapper, IWebHostEnvironment webHostEnvironment)
         {
             _context = context;
             _mapper = mapper;
+            _webHostEnvironment = webHostEnvironment;
         }
 
         public IActionResult Index()
@@ -21,15 +27,132 @@ namespace Bookify.web.Controllers
 
         public IActionResult Create()
         {
-            var authors = _context.Authors.Where(a => !a.IsDeleted).OrderBy(a =>a.Name).ToList();
-            var categories = _context.Categories.Where(a => !a.IsDeleted).OrderBy(a =>a.Name).ToList();
+            return View("Form", PopulateViewModel());
+        }
 
-            var viewModel = new BookFormViewModel
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult Create(BookFormViewModel model)
+        {
+            
+            if (!ModelState.IsValid)
+                return View("Form", PopulateViewModel(model));
+
+            var book = _mapper.Map<Book>(model);
+
+            if (model.Image is not null)
             {
-                Authors = _mapper.Map<IEnumerable<SelectListItem>>(authors),
-                Categories= _mapper.Map<IEnumerable<SelectListItem>>(categories)
-            };
+                var extension = Path.GetExtension(model.Image.FileName);
+                if (!_allowedExtentions.Contains(extension))
+                {
+                    ModelState.AddModelError(nameof(model.Image),Errors.NotAllowedExtention);
+                    return View("Form", PopulateViewModel(model));
+                }
+
+                if(model.Image.Length > _maxAllowedSize)
+                {
+                    ModelState.AddModelError(nameof(model.Image), Errors.MaxSize);
+                    return View("Form", PopulateViewModel(model));
+                }
+
+                var imageName = $"{Guid.NewGuid()}{extension}";
+
+                var path = Path.Combine($"{_webHostEnvironment.WebRootPath}/images/books", imageName);
+                using var stream = System.IO.File.Create(path);
+                model.Image.CopyTo(stream);
+
+                book.ImageUrl = imageName;
+            }
+
+            foreach (var category in model.SelectedCategories)
+                book.Categories.Add(new BookCategory { CategoryId = category});
+
+            _context.Books.Add(book);
+            _context.SaveChanges();
+
+            return RedirectToAction(nameof(Index));
+        }
+
+        public IActionResult Edit(int id)
+        {
+            var book = _context.Books.Include(b => b.Categories).SingleOrDefault(b => b.Id == id);
+            if (book is null)
+                return NotFound();
+            var model = _mapper.Map<BookFormViewModel>(book);
+            var viewModel = PopulateViewModel(model);
+
+            viewModel.SelectedCategories = book.Categories.Select(c => c.CategoryId).ToList();
             return View("Form", viewModel);
+
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult Edit(BookFormViewModel model)
+        {
+
+            if (!ModelState.IsValid)
+                return View("Form", PopulateViewModel(model));
+
+            var book = _context.Books.Include(b => b.Categories).SingleOrDefault(b => b.Id == model.Id);
+            if (book is null)
+                return NotFound();
+
+
+            if (model.Image is not null)
+            {
+                if (!string.IsNullOrEmpty(book.ImageUrl))
+                {
+                    var oldImagePath =Path.Combine($"{_webHostEnvironment.WebRootPath}/images/books",book.ImageUrl);
+                    if(System.IO.File.Exists(oldImagePath))
+                        System.IO.File.Delete(oldImagePath);
+                }
+                var extension = Path.GetExtension(model.Image.FileName);
+                if (!_allowedExtentions.Contains(extension))
+                {
+                    ModelState.AddModelError(nameof(model.Image), Errors.NotAllowedExtention);
+                    return View("Form", PopulateViewModel(model));
+                }
+
+                if (model.Image.Length > _maxAllowedSize)
+                {
+                    ModelState.AddModelError(nameof(model.Image), Errors.MaxSize);
+                    return View("Form", PopulateViewModel(model));
+                }
+
+                var imageName = $"{Guid.NewGuid()}{extension}";
+
+                var path = Path.Combine($"{_webHostEnvironment.WebRootPath}/images/books", imageName);
+                using var stream = System.IO.File.Create(path);
+                model.Image.CopyTo(stream);
+
+                model.ImageUrl = imageName;
+            }
+            else if(model.Image is null && !string.IsNullOrEmpty(book.ImageUrl))
+                model.ImageUrl = book.ImageUrl;
+
+            book = _mapper.Map(model, book);
+            book.LastUpdatedOn = DateTime.Now;
+
+            foreach (var category in model.SelectedCategories)
+                book.Categories.Add(new BookCategory { CategoryId = category });
+
+            _context.SaveChanges();
+
+            return RedirectToAction(nameof(Index));
+        }
+
+        private BookFormViewModel PopulateViewModel(BookFormViewModel? model =null)
+        {
+            BookFormViewModel viewModel = model is null ? new BookFormViewModel() : model;
+
+            var authors = _context.Authors.Where(a => !a.IsDeleted).OrderBy(a => a.Name).ToList();
+            var categories = _context.Categories.Where(a => !a.IsDeleted).OrderBy(a => a.Name).ToList();
+
+            viewModel.Authors = _mapper.Map<IEnumerable<SelectListItem>>(authors);
+            viewModel.Categories = _mapper.Map<IEnumerable<SelectListItem>>(categories);
+
+            return viewModel;
         }
     }
 }
